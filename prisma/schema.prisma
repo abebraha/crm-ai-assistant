@@ -1,0 +1,95 @@
+// Prisma Schema — CRM AI Assistant
+// Default: SQLite for easy local setup. Change to postgresql for production.
+// To switch: change provider to "postgresql" and update DATABASE_URL in .env.local
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// ─── NextAuth models ──────────────────────────────────────────────────────────
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+// ─── User ────────────────────────────────────────────────────────────────────
+
+model User {
+  id             String          @id @default(cuid())
+  name           String?
+  email          String          @unique
+  emailVerified  DateTime?
+  image          String?
+  password       String?         // bcrypt hash — null for OAuth users
+  defaultCRM     String          @default("hubspot")
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  accounts       Account[]
+  sessions       Session[]
+  crmConnections CRMConnection[]
+}
+
+// ─── CRM Connections ─────────────────────────────────────────────────────────
+
+model CRMConnection {
+  id           String    @id @default(cuid())
+  userId       String
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  crmType      String    // hubspot | salesforce | pipedrive | zoho | close
+
+  // Credentials — stored encrypted (AES-256-GCM via lib/crypto.ts)
+  apiKey       String?   // encrypted API key
+  accessToken  String?   // encrypted OAuth access token
+  refreshToken String?   // encrypted OAuth refresh token
+  tokenExpiry  DateTime?
+
+  // OAuth app config (needed for token refresh)
+  oauthClientId     String?
+  oauthClientSecret String?  // encrypted
+
+  // Extra CRM-specific config (JSON string)
+  // e.g. Salesforce: { loginUrl, instanceUrl }
+  extraConfig  String?
+
+  connectedAt  DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@unique([userId, crmType])
+}
