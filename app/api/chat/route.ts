@@ -69,12 +69,12 @@ async function executeTool(
         break;
       }
       case 'log_activity': {
-        const r = await adapter.logActivity(args as Parameters<CRMAdapter['logActivity']>[0]);
+        const r = await adapter.logActivity(args as unknown as Parameters<CRMAdapter['logActivity']>[0]);
         result = r; label = r.success ? `✓ Activity logged` : `✗ ${r.message}`;
         break;
       }
       case 'create_task': {
-        const r = await adapter.createTask(args as Parameters<CRMAdapter['createTask']>[0]);
+        const r = await adapter.createTask(args as unknown as Parameters<CRMAdapter['createTask']>[0]);
         result = r; label = r.success ? `✓ Task created` : `✗ ${r.message}`;
         break;
       }
