@@ -1,25 +1,26 @@
 'use client';
 
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { Send, RotateCcw, Database, Settings, User, LogOut, ChevronDown } from 'lucide-react';
+import { Send, RotateCcw, Database, Settings, LogOut, ChevronDown } from 'lucide-react';
 import { useSession, signOut } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import MessageBubble, { TypingIndicator } from '@/components/MessageBubble';
 import VoiceRecorder from '@/components/VoiceRecorder';
 import CRMSelector, { CRM_OPTIONS } from '@/components/CRMSelector';
-import { Message, CRMType } from '@/lib/crm/types';
+import { Message, CRMType, PendingAction } from '@/lib/crm/types';
 import clsx from 'clsx';
 
 const WELCOME: Message = {
   id: 'welcome',
   role: 'assistant',
-  content: `👋 Hi! I'm your CRM AI assistant. Tell me anything about a deal, contact, or activity and I'll update your CRM automatically.
+  content: `👋 Hi! I'm your CRM AI assistant. Ask me anything about your contacts, deals, or activities — or tell me what to update.
 
 Try things like:
-• "Just had a call with Sarah at TechCorp. She's interested in the Enterprise plan, budget around 30k."
-• "Move the Acme deal to Proposal Sent and set the close date to end of month."
+• "Where are we with Chaim Handler?"
+• "What are my active deals?"
+• "Move the Acme deal to Won and set close date to today."
 • "Create a follow-up task for John Smith tomorrow at 10am."
-• "Update David Lee's email to david@newcompany.com and his title to VP of Sales."
+• "Log a call with Sarah — she's interested in the Enterprise plan."
 
 You can also send a voice note using the mic button. 🎙️`,
   timestamp: new Date().toISOString(),
@@ -29,16 +30,19 @@ export default function ChatInterface() {
   const { data: session, status } = useSession();
   const router = useRouter();
 
-  const [messages,        setMessages]        = useState<Message[]>([WELCOME]);
-  const [input,           setInput]           = useState('');
-  const [loading,         setLoading]         = useState(false);
-  const [crm,             setCrm]             = useState<CRMType>('hubspot');
-  const [connectedCrms,   setConnectedCrms]   = useState<CRMType[]>([]);
-  const [userMenuOpen,    setUserMenuOpen]     = useState(false);
+  const [messages,      setMessages]      = useState<Message[]>([WELCOME]);
+  const [input,         setInput]         = useState('');
+  const [loading,       setLoading]       = useState(false);
+  const [crm,           setCrm]           = useState<CRMType>('hubspot');
+  const [connectedCrms, setConnectedCrms] = useState<CRMType[]>([]);
+  const [userMenuOpen,  setUserMenuOpen]  = useState(false);
+  // Track which message IDs have already been confirmed/cancelled (hide confirm card)
+  const [resolvedMsgs,  setResolvedMsgs]  = useState<Set<string>>(new Set());
+
   const bottomRef   = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  // Redirect to login if not authenticated
+  // Redirect if unauthenticated
   useEffect(() => {
     if (status === 'unauthenticated') router.push('/login');
   }, [status, router]);
@@ -70,7 +74,7 @@ export default function ChatInterface() {
       .catch(() => {});
   }, []);
 
-  // Greet the user by name when they first log in
+  // Personalise welcome message
   useEffect(() => {
     if (session?.user?.name) {
       setMessages([{
@@ -79,6 +83,8 @@ export default function ChatInterface() {
       }]);
     }
   }, [session?.user?.name]);
+
+  // ── Core send ────────────────────────────────────────────────────────────────
 
   const sendMessage = useCallback(async (text: string, isVoice = false) => {
     if (!text.trim() || loading) return;
@@ -98,9 +104,15 @@ export default function ChatInterface() {
       const res = await fetch('/api/chat', {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ message: text, crm, history: messages.slice(-10) }),
+        body:    JSON.stringify({ message: text, crm, history: messages.slice(-12) }),
       });
-      const data = await res.json() as { reply?: string; actions?: Message['actions']; error?: string; needsSetup?: boolean };
+      const data = await res.json() as {
+        reply?: string;
+        actions?: Message['actions'];
+        pendingActions?: PendingAction[];
+        error?: string;
+        needsSetup?: boolean;
+      };
 
       if (!res.ok) {
         if (data.needsSetup) {
@@ -122,11 +134,12 @@ export default function ChatInterface() {
       setMessages((prev) => [
         ...prev,
         {
-          id:        crypto.randomUUID(),
-          role:      'assistant',
-          content:   data.reply ?? 'Done.',
-          timestamp: new Date().toISOString(),
-          actions:   data.actions,
+          id:             crypto.randomUUID(),
+          role:           'assistant',
+          content:        data.reply ?? 'Done.',
+          timestamp:      new Date().toISOString(),
+          actions:        data.actions,
+          pendingActions: data.pendingActions,
         },
       ]);
     } catch (err: unknown) {
@@ -144,6 +157,60 @@ export default function ChatInterface() {
       setLoading(false);
     }
   }, [loading, crm, messages]);
+
+  // ── Confirm pending writes ────────────────────────────────────────────────────
+
+  const handleConfirm = useCallback(async (messageId: string, pending: PendingAction[]) => {
+    setResolvedMsgs((prev) => new Set([...prev, messageId]));
+    setLoading(true);
+
+    try {
+      const res = await fetch('/api/chat', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ isConfirmation: true, pendingActions: pending, crm, history: [] }),
+      });
+      const data = await res.json() as { reply?: string; actions?: Message['actions']; error?: string };
+
+      setMessages((prev) => [
+        ...prev,
+        {
+          id:        crypto.randomUUID(),
+          role:      'assistant',
+          content:   data.reply ?? 'Changes applied.',
+          timestamp: new Date().toISOString(),
+          actions:   data.actions,
+        },
+      ]);
+    } catch {
+      setMessages((prev) => [
+        ...prev,
+        {
+          id:        crypto.randomUUID(),
+          role:      'assistant',
+          content:   '⚠️ Something went wrong while applying changes. Please try again.',
+          timestamp: new Date().toISOString(),
+        },
+      ]);
+    } finally {
+      setLoading(false);
+    }
+  }, [crm]);
+
+  const handleCancel = useCallback((messageId: string) => {
+    setResolvedMsgs((prev) => new Set([...prev, messageId]));
+    setMessages((prev) => [
+      ...prev,
+      {
+        id:        crypto.randomUUID(),
+        role:      'assistant',
+        content:   'OK, no changes were made.',
+        timestamp: new Date().toISOString(),
+      },
+    ]);
+  }, []);
+
+  // ── Voice ─────────────────────────────────────────────────────────────────────
 
   const handleVoice = useCallback(async (blob: Blob) => {
     setLoading(true);
@@ -173,7 +240,7 @@ export default function ChatInterface() {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(input); }
   };
 
-  const reset = () => { setMessages([WELCOME]); setInput(''); };
+  const reset = () => { setMessages([WELCOME]); setInput(''); setResolvedMsgs(new Set()); };
 
   if (status === 'loading') {
     return (
@@ -183,8 +250,9 @@ export default function ChatInterface() {
     );
   }
 
-  const userName  = session?.user?.name ?? session?.user?.email ?? 'You';
-  const initials  = userName.split(' ').map((n) => n[0]).slice(0, 2).join('').toUpperCase();
+  const userName = session?.user?.name ?? session?.user?.email ?? 'You';
+  const initials = userName.split(' ').map((n) => n[0]).slice(0, 2).join('').toUpperCase();
+  const crmLabel = CRM_OPTIONS.find((o) => o.value === crm)?.label ?? crm;
 
   return (
     <div className="flex flex-col h-full max-w-4xl mx-auto w-full">
@@ -207,7 +275,7 @@ export default function ChatInterface() {
 
           <button
             onClick={reset}
-            title="Clear conversation"
+            title="New conversation"
             className="p-2 rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-colors"
           >
             <RotateCcw className="w-4 h-4" />
@@ -258,9 +326,18 @@ export default function ChatInterface() {
       </header>
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto px-6 py-6 messages-scroll flex flex-col gap-5" onClick={() => setUserMenuOpen(false)}>
+      <div
+        className="flex-1 overflow-y-auto px-6 py-6 messages-scroll flex flex-col gap-5"
+        onClick={() => setUserMenuOpen(false)}
+      >
         {messages.map((msg) => (
-          <MessageBubble key={msg.id} message={msg} />
+          <MessageBubble
+            key={msg.id}
+            message={msg}
+            showConfirm={!resolvedMsgs.has(msg.id)}
+            onConfirm={(pending) => handleConfirm(msg.id, pending)}
+            onCancel={() => handleCancel(msg.id)}
+          />
         ))}
         {loading && <TypingIndicator />}
         <div ref={bottomRef} />
@@ -274,7 +351,7 @@ export default function ChatInterface() {
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder={`Tell me what to update in ${CRM_OPTIONS.find((o) => o.value === crm)?.label ?? crm}…`}
+            placeholder={`Ask about or update ${crmLabel}…`}
             rows={1}
             disabled={loading}
             className="flex-1 resize-none outline-none text-sm text-slate-800 placeholder-slate-400 bg-transparent max-h-40 disabled:opacity-50"
@@ -288,7 +365,7 @@ export default function ChatInterface() {
                 'flex items-center justify-center w-9 h-9 rounded-full transition-all duration-200',
                 input.trim() && !loading
                   ? 'bg-brand-500 text-white hover:bg-brand-600 shadow-md shadow-brand-200'
-                  : 'bg-slate-100 text-slate-300 cursor-not-allowed'
+                  : 'bg-slate-100 text-slate-300 cursor-not-allowed',
               )}
             >
               <Send className="w-4 h-4" />
@@ -296,7 +373,8 @@ export default function ChatInterface() {
           </div>
         </div>
         <p className="text-center text-xs text-slate-400 mt-2">
-          Press <kbd className="font-mono bg-slate-100 px-1 rounded">Enter</kbd> to send · <kbd className="font-mono bg-slate-100 px-1 rounded">Shift+Enter</kbd> for new line · Mic for voice
+          Press <kbd className="font-mono bg-slate-100 px-1 rounded">Enter</kbd> to send ·{' '}
+          <kbd className="font-mono bg-slate-100 px-1 rounded">Shift+Enter</kbd> for new line · Mic for voice
         </p>
       </div>
     </div>

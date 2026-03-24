@@ -9,6 +9,12 @@ export interface ActionResult {
   status: 'success' | 'error' | 'info';
 }
 
+export interface PendingAction {
+  tool: string;
+  args: Record<string, unknown>;
+  description: string;  // human-readable description of what will happen
+}
+
 export interface Message {
   id: string;
   role: 'user' | 'assistant';
@@ -16,6 +22,7 @@ export interface Message {
   timestamp: string;
   isVoice?: boolean;
   actions?: ActionResult[];
+  pendingActions?: PendingAction[];   // write-ops awaiting user confirmation
 }
 
 // ─── Normalized CRM entity types ─────────────────────────────────────────────
@@ -115,4 +122,8 @@ export interface CRMAdapter {
 
   // Pipeline
   getPipelineStages(): Promise<{ id: string; name: string }[]>;
+
+  // Optional — richer lookup (implemented per-adapter)
+  getLeadOverview?(query: string): Promise<Record<string, unknown>>;
+  listActivities?(leadId: string): Promise<Record<string, unknown>[]>;
 }
