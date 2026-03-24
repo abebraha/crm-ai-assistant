@@ -3,4 +3,4 @@ builder = "NIXPACKS"
 buildCommand = "npm install && npx prisma generate && npm run build"
 
 [deploy]
-startCommand = "npx next start -p ${PORT:-3000}"
+startCommand = "npx prisma db push --accept-data-loss && npx next start -p ${PORT:-3000}"
