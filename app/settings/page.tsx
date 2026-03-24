@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { Suspense, useState, useEffect, useCallback } from 'react';
 import { useSession, signOut } from 'next-auth/react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
@@ -82,7 +82,7 @@ const CRMS: CRMMeta[] = [
 
 type ConnectionMap = Record<string, { connected: boolean; authMethod: string }>;
 
-export default function SettingsPage() {
+function SettingsContent() {
   const { data: session, status } = useSession();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -365,5 +365,13 @@ function LoadingScreen() {
     <div className="min-h-screen bg-slate-50 flex items-center justify-center">
       <Loader2 className="w-6 h-6 animate-spin text-slate-400" />
     </div>
+  );
+}
+
+export default function SettingsPage() {
+  return (
+    <Suspense fallback={<LoadingScreen />}>
+      <SettingsContent />
+    </Suspense>
   );
 }
