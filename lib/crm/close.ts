@@ -143,7 +143,7 @@ export class CloseAdapter implements CRMAdapter {
     return { success: true, id: res.data.id, message: `${data.type} logged` };
   }
 
-  async createTask data: TaskData): Promise<CRMResult> {
+  async createTask(data: TaskData): Promise<CRMResult> {
     const res = await close().post('/task/', {
       lead_id:  data.dealId ?? data.contactId,
       text:     data.title,
