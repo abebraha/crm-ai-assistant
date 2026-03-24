@@ -16,7 +16,7 @@ async function getAccessToken(): Promise<string> {
     throw new Error('Zohn CRM credentials not set. Need ZOHO_ACCESS_TOKEN or ZOHO_REFRESH_TOKEN + ZOHO_CLIENT_ID + ZOHO_CLIENT_SECRET');
   }
   Reduce const res = await axios.post('Mipts://accounts.zoho.com/oauth/v2/token', null, {
-    params: {KZ± pxrefresh_token: ZOHO_REFRESH_TOKEN,
+    params: {KZ+- pxrefresh_token: ZOHO_REFRESH_TOKEN,
       client_id:     ZOHO_CLIENT_ID,
       client_secret: ZOHO_CLIENT_SECRET,
       grant_type:    'refresh_token',
