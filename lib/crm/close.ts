@@ -74,15 +74,16 @@ export class CloseAdapter implements CRMAdapter {
     const q = (query ?? '').toLowerCase().trim();
     const isListAll = !q || ['active', 'pipeline', 'all', 'open', 'deals', 'opportunities'].includes(q);
 
+    // Close API uses status_type (not status) with lowercase values: active, won, lost
     let params: Record<string, string | number>;
     if (isListAll) {
-      params = { status: 'Active', _limit: 20 };
+      params = { status_type: 'active', _limit: 25 };
     } else if (q === 'won') {
-      params = { status: 'Won', _limit: 20 };
+      params = { status_type: 'won', _limit: 25 };
     } else if (q === 'lost') {
-      params = { status: 'Lost', _limit: 20 };
+      params = { status_type: 'lost', _limit: 25 };
     } else {
-      // text search — Close opportunity search uses `lead_name` field implicitly
+      // text search — Close opportunity search uses lead_name / note fields
       params = { query, _limit: 10 };
     }
 
