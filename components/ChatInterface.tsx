@@ -6,7 +6,7 @@ import { useSession, signOut } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import MessageBubble, { TypingIndicator } from '@/components/MessageBubble';
 import VoiceRecorder from '@/components/VoiceRecorder';
-import CRMSelector from '@/components/CRMSelector';
+import CRMSelector, { CRM_OPTIONS } from '@/components/CRMSelector';
 import { Message, CRMType } from '@/lib/crm/types';
 import clsx from 'clsx';
 
@@ -29,11 +29,12 @@ export default function ChatInterface() {
   const { data: session, status } = useSession();
   const router = useRouter();
 
-  const [messages,  setMessages]  = useState<Message[]>([WELCOME]);
-  const [input,     setInput]     = useState('');
-  const [loading,   setLoading]   = useState(false);
-  const [crm,       setCrm]       = useState<CRMType>('hubspot');
-  const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const [messages,        setMessages]        = useState<Message[]>([WELCOME]);
+  const [input,           setInput]           = useState('');
+  const [loading,         setLoading]         = useState(false);
+  const [crm,             setCrm]             = useState<CRMType>('hubspot');
+  const [connectedCrms,   setConnectedCrms]   = useState<CRMType[]>([]);
+  const [userMenuOpen,    setUserMenuOpen]     = useState(false);
   const bottomRef   = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -54,6 +55,20 @@ export default function ChatInterface() {
     ta.style.height = 'auto';
     ta.style.height = Math.min(ta.scrollHeight, 160) + 'px';
   }, [input]);
+
+  // Load connected CRMs
+  useEffect(() => {
+    fetch('/api/crm-connections')
+      .then((r) => r.json())
+      .then((data: { connections?: { crmType: CRMType; connected: boolean }[] }) => {
+        const connected = (data.connections ?? [])
+          .filter((c) => c.connected)
+          .map((c) => c.crmType);
+        setConnectedCrms(connected);
+        if (connected.length > 0) setCrm(connected[0]);
+      })
+      .catch(() => {});
+  }, []);
 
   // Greet the user by name when they first log in
   useEffect(() => {
@@ -186,7 +201,9 @@ export default function ChatInterface() {
         </div>
 
         <div className="flex items-center gap-2">
-          <CRMSelector selected={crm} onChange={setCrm} />
+          {connectedCrms.length > 0 && (
+            <CRMSelector selected={crm} onChange={setCrm} connectedCrms={connectedCrms} />
+          )}
 
           <button
             onClick={reset}
@@ -257,7 +274,7 @@ export default function ChatInterface() {
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder={`Tell me what to update in ${crm === 'hubspot' ? 'HubSpot' : crm === 'salesforce' ? 'Salesforce' : crm === 'pipedrive' ? 'Pipedrive' : crm === 'zoho' ? 'Zoho CRM' : 'Close CRM'}…`}
+            placeholder={`Tell me what to update in ${CRM_OPTIONS.find((o) => o.value === crm)?.label ?? crm}…`}
             rows={1}
             disabled={loading}
             className="flex-1 resize-none outline-none text-sm text-slate-800 placeholder-slate-400 bg-transparent max-h-40 disabled:opacity-50"

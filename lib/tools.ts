@@ -38,11 +38,11 @@ export const CRM_TOOLS: OpenAI.Chat.Completions.ChatCompletionTool[] = [
     type: 'function',
     function: {
       name: 'search_deals',
-      description: 'Search for deals/opportunities in the CRM by name, company, or contact.',
+      description: 'Search for deals/opportunities in the CRM. Pass an empty string to list all active/open deals. Pass "won" or "lost" to filter by status. Pass a name or company to text-search.',
       parameters: {
         type: 'object',
         properties: {
-          query: { type: 'string', description: 'Deal name, company, or contact to search' },
+          query: { type: 'string', description: 'Deal name or company to search, OR empty string to list all active deals, OR "won"/"lost" to filter by status' },
         },
         required: ['query'],
       },
@@ -243,4 +243,13 @@ RULES:
 6. For relative dates like "end of month", "next Friday", "tomorrow" — calculate the actual date.
 7. Always be concise but human. Don't use jargon. Don't repeat the user's message back to them.
 8. If no CRM credentials are configured for a particular action, politely say so and explain what environment variable is needed.
+9. When the search tool returns results, trust those results and tell the user what you found — even if the list is long. Never say "not found" when the tool returned matching records.
+10. When a user asks to see their deals, pipeline, or active opportunities, call search_deals with an empty string ("") to list all active deals.
+
+CLOSE CRM SPECIFICS (when Active CRM is CLOSE):
+- Deals are called "Opportunities". They have statuses: Active, Won, Lost.
+- To list all active pipeline deals, call search_deals with query "".
+- Contacts in Close live inside Leads (Leads = companies/accounts).
+- When the user asks "where are we with [person]?", search_contacts first, then if needed search for their company via search_companies.
+- Searching contacts returns their name, title, email, phone, and associated lead/company.
 `;

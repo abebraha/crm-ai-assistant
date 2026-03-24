@@ -4,7 +4,7 @@ import { ChevronDown } from 'lucide-react';
 import { useState } from 'react';
 import { CRMType } from '@/lib/crm/types';
 
-const CRM_OPTIONS: { value: CRMType; label: string; color: string }[] = [
+export const CRM_OPTIONS: { value: CRMType; label: string; color: string }[] = [
   { value: 'hubspot',     label: 'HubSpot',     color: 'bg-orange-500' },
   { value: 'salesforce',  label: 'Salesforce',  color: 'bg-blue-600'   },
   { value: 'pipedrive',   label: 'Pipedrive',   color: 'bg-green-600'  },
@@ -15,11 +15,25 @@ const CRM_OPTIONS: { value: CRMType; label: string; color: string }[] = [
 interface Props {
   selected: CRMType;
   onChange: (crm: CRMType) => void;
+  connectedCrms: CRMType[];
 }
 
-export default function CRMSelector({ selected, onChange }: Props) {
+export default function CRMSelector({ selected, onChange, connectedCrms }: Props) {
   const [open, setOpen] = useState(false);
-  const current = CRM_OPTIONS.find((o) => o.value === selected)!;
+  const options = CRM_OPTIONS.filter((o) => connectedCrms.includes(o.value));
+  const current = options.find((o) => o.value === selected) ?? options[0];
+
+  if (!current) return null;
+
+  // Single CRM — static badge, no dropdown
+  if (options.length === 1) {
+    return (
+      <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white border border-slate-200 shadow-sm text-sm font-medium text-slate-700">
+        <span className={`inline-block w-2.5 h-2.5 rounded-full ${current.color}`} />
+        {current.label}
+      </div>
+    );
+  }
 
   return (
     <div className="relative">
@@ -34,7 +48,7 @@ export default function CRMSelector({ selected, onChange }: Props) {
 
       {open && (
         <div className="absolute right-0 mt-1 w-44 bg-white border border-slate-200 rounded-xl shadow-lg z-50 overflow-hidden">
-          {CRM_OPTIONS.map((opt) => (
+          {options.map((opt) => (
             <button
               key={opt.value}
               onClick={() => { onChange(opt.value); setOpen(false); }}
