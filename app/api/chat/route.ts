@@ -6,8 +6,6 @@ import { getCRMAdapter } from '@/lib/crm';
 import { CRMType, ActionResult, CRMAdapter, SearchResult, CRMResult } from '@/lib/crm/types';
 import { CRM_TOOLS, SYSTEM_PROMPT } from '@/lib/tools';
 
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-
 // ─── Execute a single tool call ───────────────────────────────────────────────
 
 async function executeTool(
@@ -115,6 +113,8 @@ export async function POST(req: NextRequest) {
 
     if (!message) return NextResponse.json({ error: 'No message provided' }, { status: 400 });
     if (!process.env.OPENAI_API_KEY) return NextResponse.json({ error: 'OPENAI_API_KEY is not configured on the server' }, { status: 500 });
+
+    const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
     // ── Load user credentials ────────────────────────────────────────────────
     const session = await getAuth();
