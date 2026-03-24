@@ -24,7 +24,7 @@ export async function GET() {
   });
 
   // Return sanitized list — never expose encrypted values to the client
-  const sanitized = connections.map((c) => ({
+  const sanitized = connections.map((c: Record<string, unknown>) => ({
     crmType:     c.crmType,
     connected:   !!(c.apiKey || c.accessToken),
     authMethod:  c.accessToken ? 'oauth' : 'apikey',
